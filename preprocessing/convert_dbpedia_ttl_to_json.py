@@ -16,7 +16,8 @@ import time
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--input", type=str, default="/tmp/gdoggg2032/try.ttl", help="input ttl file path")
+# long_abstracts_en.ttl wget and extract from http://downloads.dbpedia.org/2015-04/core-i18n/en/long-abstracts_en.ttl.bz2
+parser.add_argument("--input", type=str, default="/tmp/gdoggg2032/long_abstracts_en.ttl", help="input ttl file path")
 parser.add_argument("--output", type=str, help="output json file path")
 
 
@@ -30,7 +31,9 @@ logging.info("start processing...")
 
 g = rdflib.Graph()
 
+
 logging.info("read data from: {}".format(args.input))
+# this costs long time
 g.parse(args.input, format="ttl")
 
 
