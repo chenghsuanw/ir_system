@@ -116,6 +116,8 @@ def dump_documents(D, w2i, entity2i):
 	if not os.path.exists(docs_dir_path):
 		os.makedirs(docs_dir_path)
 
+	doc_lens = {}
+
 	for d in D:
 
 		# note that some document has no context
@@ -128,6 +130,8 @@ def dump_documents(D, w2i, entity2i):
 			# convert words to index
 			indices = [w2i[w] for w in clear_string(d["abstract"]).split() if w in w2i]
 
+			doc_lens[doc_id] = len(indices)
+
 			# we use dict to store a doc
 			# format: {word_index: freq}
 			doc = dict(Counter(indices))
@@ -136,7 +140,13 @@ def dump_documents(D, w2i, entity2i):
 
 			pickle.dump(doc, open(doc_path, "wb"))
 
-	logging.info("dump documents time cost: {}".format(time.time() - s_time))
+	doc_lens_path = os.path.join(FLAGS.output, "doc_lens.json")
+
+	json.dump(doc_lens, open(doc_lens_path, "w"))
+
+	logging.info("dump documents and doc_lens time cost: {}".format(time.time() - s_time))
+
+	
 
 
 
@@ -152,8 +162,10 @@ def update_inverted_index(inverted_index, index_dir_path):
 
 			d = pickle.load(open(word_index_path, "rb"))
 
-			d["df"] += index["df"]
-			d["tf"].update(index["tf"])
+			d.update(index)
+
+			# d["df"] = max(d["df"], index["df"])
+			# d["tf"].update(index["tf"])
 
 			pickle.dump(d, open(word_index_path, "wb"))
 
@@ -192,17 +204,25 @@ def dump_inverted_index(D, w2i, entity2i, chunk_size=100000):
 
 			for i in indices:
 
+				# if i not in inverted_index:
+				# 	inverted_index[i] = {}
+				# 	inverted_index[i]["df"] = 0
+				# 	inverted_index[i]["tf"] = {}
+
+				# inverted_index[i]["df"] += 1 
+
+				# if doc_id not in inverted_index[i]["tf"]:
+				# 	inverted_index[i]["tf"][doc_id] = 0
+
+				# inverted_index[i]["tf"][doc_id] += 1
 				if i not in inverted_index:
 					inverted_index[i] = {}
-					inverted_index[i]["df"] = 0
-					inverted_index[i]["tf"] = {}
 
-				inverted_index[i]["df"] += 1 
+				if doc_id not in inverted_index[i]:
+					inverted_index[i][doc_id] = 0
 
-				if doc_id not in inverted_index[i]["tf"]:
-					inverted_index[i]["tf"][doc_id] = 0
+				inverted_index[i][doc_id] += 1
 
-				inverted_index[i]["tf"][doc_id] += 1
 
 
 		if n % chunk_size == 0:
@@ -218,7 +238,20 @@ def dump_inverted_index(D, w2i, entity2i, chunk_size=100000):
 
 
 
+def dump_meta_data(D, w2i, entity2i):
 
+	s_time = time.time()
+
+	meta_data = {
+		"num_docs": len(entity2i), # number of documents with abstract
+		"vocab_size": len(w2i), # total word number
+	}
+
+	meta_data_path = os.path.join(FLAGS.output, "meta_data.json")
+
+	json.dump(meta_data, open(meta_data_path, "w"))
+
+	logging.info("dump meta data time cost: {}".format(time.time() - s_time))
 
 def main():
 
@@ -232,6 +265,8 @@ def main():
 	dump_documents(D, w2i, entity2i)
 
 	dump_inverted_index(D, w2i, entity2i)
+
+	dump_meta_data(D, w2i, entity2i)
 
 
 
