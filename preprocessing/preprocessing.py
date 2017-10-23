@@ -24,6 +24,8 @@ import progressbar as pb
 parser = argparse.ArgumentParser()
 parser.add_argument("--input", type=str, default="../datasets/small/DBdoc.json", help="input json file path")
 parser.add_argument("--output", type=str, default="../indices/small", help="output directory path")
+parser.add_argument("--word_index_chunk_size", type=int, default=1000, help="index chunk size, word_index path will be stored in word_index \% index_chunk_size path")
+parser.add_argument("--document_index_chunk_size", type=int, default=1000, help="index chunk size, word_index path will be stored in word_index \% index_chunk_size path")
 
 
 FLAGS = parser.parse_args()
@@ -125,7 +127,7 @@ def dump_documents(D, w2i, entity2i):
 			
 			doc_id = entity2i[d["entity"]]
 
-			doc_path = os.path.join(docs_dir_path, str(doc_id))
+			doc_path = os.path.join(docs_dir_path, str(doc_id % FLAGS.index_chunk_size))
 
 			# convert words to index
 			indices = [w2i[w] for w in clear_string(d["abstract"]).split() if w in w2i]
@@ -138,7 +140,14 @@ def dump_documents(D, w2i, entity2i):
 
 			# save in pickle format
 
-			pickle.dump(doc, open(doc_path, "wb"))
+			if os.path.isfile(word_index_path):
+				docs = pickle.load(open(doc_path, "rb"))
+			else:
+				docs = {}
+
+			docs.update({doc_id:doc})
+
+			pickle.dump(docs, open(doc_path, "wb"))
 
 	doc_lens_path = os.path.join(FLAGS.output, "doc_lens.json")
 
@@ -156,7 +165,7 @@ def update_inverted_index(inverted_index, index_dir_path):
 
 	for word_index, index in inverted_index.items():
 
-		word_index_path = os.path.join(index_dir_path, str(word_index % 1000))
+		word_index_path = os.path.join(index_dir_path, str(word_index % FLAGS.word_index_chunk_size))
 
 		if os.path.isfile(word_index_path):
 
