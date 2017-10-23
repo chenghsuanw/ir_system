@@ -127,7 +127,7 @@ def dump_documents(D, w2i, entity2i):
 			
 			doc_id = entity2i[d["entity"]]
 
-			doc_path = os.path.join(docs_dir_path, str(doc_id % FLAGS.index_chunk_size))
+			doc_path = os.path.join(docs_dir_path, str(doc_id % FLAGS.document_index_chunk_size))
 
 			# convert words to index
 			indices = [w2i[w] for w in clear_string(d["abstract"]).split() if w in w2i]
