@@ -156,13 +156,16 @@ def update_inverted_index(inverted_index, index_dir_path):
 
 	for word_index, index in inverted_index.items():
 
-		word_index_path = os.path.join(index_dir_path, str(word_index))
+		word_index_path = os.path.join(index_dir_path, str(word_index % 1000))
 
 		if os.path.isfile(word_index_path):
 
 			d = pickle.load(open(word_index_path, "rb"))
 
-			d.update(index)
+			if word_index not in d:
+				d[word_index] = {}
+
+			d[word_index].update(index)
 
 			# d["df"] = max(d["df"], index["df"])
 			# d["tf"].update(index["tf"])
@@ -171,7 +174,7 @@ def update_inverted_index(inverted_index, index_dir_path):
 
 		else:
 
-			pickle.dump(index, open(word_index_path, "wb"))
+			pickle.dump({word_index:index}, open(word_index_path, "wb"))
 
 
 
@@ -225,7 +228,7 @@ def dump_inverted_index(D, w2i, entity2i, chunk_size=100000):
 
 
 
-		if n % chunk_size == 0:
+		if (n+1) % chunk_size == 0:
 			logging.info("processing {}/{}".format(n, num_doc))
 			update_inverted_index(inverted_index, index_dir_path)
 			inverted_index = {}
