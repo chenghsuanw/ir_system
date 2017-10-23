@@ -140,7 +140,7 @@ def dump_documents(D, w2i, entity2i):
 
 			# save in pickle format
 
-			if os.path.isfile(word_index_path):
+			if os.path.isfile(doc_path):
 				docs = pickle.load(open(doc_path, "rb"))
 			else:
 				docs = {}
