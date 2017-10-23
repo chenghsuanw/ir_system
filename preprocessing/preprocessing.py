@@ -257,6 +257,8 @@ def dump_meta_data(D, w2i, entity2i):
 	meta_data = {
 		"num_docs": len(entity2i), # number of documents with abstract
 		"vocab_size": len(w2i), # total word number
+		"word_index_chunk_size": FLAGS.word_index_chunk_size,
+		"document_index_chunk_size": FLAGS.document_index_chunk_size,
 	}
 
 	meta_data_path = os.path.join(FLAGS.output, "meta_data.json")
