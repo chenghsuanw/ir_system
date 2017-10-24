@@ -17,7 +17,7 @@ import progressbar as pb
 parser = argparse.ArgumentParser()
 parser.add_argument("--query", type=str, default="./datasets/small/queries-v2.txt", help="input query file path")
 parser.add_argument("--output", type=str, default="./result.run", help="output format file path")
-parser.add_argument("--index", type=str, default="./indices/small", help="index directory path")
+parser.add_argument("--index", type=str, default="./db/small", help="index directory path")
 parser.add_argument("--model", type=str, default="vsm", help="model type: [vsm, ]")
 parser.add_argument("--top", type=int, default=1000, help="output top k ranked list")
 
@@ -77,6 +77,7 @@ def main():
 
 	# select model
 	model = select_model(FLAGS.model)
+	logging.info("model [{}] initialized".format(model.name))
 
 
 	# retrieval
@@ -109,7 +110,7 @@ def main():
 	columns = ["query_id", "Q0", "entity", "rank", "score", "model_name"]
 
 	logging.info("dump result to: {}".format(FLAGS.output))
-	result_df.to_csv(FLAGS.output, columns=columns, index=None, header=None)
+	result_df.to_csv(FLAGS.output, columns=columns, index=None, header=None, sep=" ")
 
 
 

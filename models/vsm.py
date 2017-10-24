@@ -9,20 +9,29 @@ import numpy as np
 from sklearn.preprocessing import normalize
 
 # from model import Model 
-from models.model import Model 
+from models.model2 import Model2
 
 
-class VSM(Model):
+class VSM(Model2):
 
 	
 
 	def __init__(self, index_dir_path):
 
-		Model.__init__(self, index_dir_path)
+		Model2.__init__(self, index_dir_path)
 
 		self.name = "tf-idf-cosine-vsm"
 
 		self.idf_dict = {}
+
+		self.df = self.get_all_df()
+
+		#print("asd", len(self.df))
+
+
+		df_vec = scipy.sparse.csr_matrix(([math.log(self.num_docs) - math.log(self.df[i]) for i in range(self.vocab_size) if i in self.df], ([0] * self.vocab_size, [i for i in range(self.vocab_size)])))
+		# self.idf_vec = math.log(self.num_docs) - df_vec
+		self.idf_vec = df_vec
 
 	def compute_idf(self, df, num_docs):
 
@@ -52,12 +61,16 @@ class VSM(Model):
 
 		value = []
 		index = []
-
+		#print("asd1.3")
 		for i, tf in doc.items():
 			index.append(i)
-			value.append(tf * self.idf(i))
-
+			value.append(tf)
+			# value.append(tf * self.idf(i))
+		#print("asd1.4")
 		vec = scipy.sparse.csr_matrix((value, ([0] * len(index), index)), shape=(1, self.vocab_size))
+		#print("asd1.5")
+		vec = vec.multiply(self.idf_vec)
+		#print("asd1.6")
 
 		return vec
 
@@ -74,38 +87,51 @@ class VSM(Model):
 
 		word_indices = [wi for wi in q_dict]
 
+		##print("asd0")
 		docs = self.get_docs_by_word_id(word_indices)
 		# [(doc_id, {word_index: freq})]
 
+		#print("5")
 		entities = []
 		doc_vecs = []
-
-		for doc_id, doc in docs:
-			vec = self.doc2bow(doc)
+		##print("asd1")
+		for doc_id, doc, sq2 in docs:
+			#print("5.1")
+			vec = self.doc2bow(doc) / sq2
+			#print("5.2")
 
 			entities.append(self.i2e[doc_id])
 			doc_vecs.append(vec)
 
+		# ##print("asd1.5")
 		doc_vecs = scipy.sparse.vstack(doc_vecs)
-
+		#print("6")
 		# cosine similarity
 
 		# normalize (we only do it on doc vecs)
-		
-		doc_vecs = normalize(doc_vecs, norm='l2', axis=1)
+		##print("asd2")
+		# doc_vecs = normalize(doc_vecs, norm='l2', axis=1)
 		# shape: (n, V)
 
-		# compute similarity
+		# #print("7")
 
+		# compute similarity
+		##print("asd3")
 		similarities = (doc_vecs * q_vec.T).toarray()[:, 0]
 		# shape should be (n,)
+
+		#print("8")
 
 		doc_scores = [(entity, score) for entity, score in zip(entities, similarities)]
 
 		# ranking
-
+		##print("asd4")
 		top_k = sorted(doc_scores, key=lambda x:x[1], reverse=True)[:top]
 
+		##print("asd5")
+
+		##print("dhit", self.doc_hit)
+		##print("whit", self.word_hit)
 		return top_k
 
 
