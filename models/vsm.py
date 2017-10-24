@@ -8,7 +8,8 @@ import scipy.sparse
 import numpy as np 
 from sklearn.preprocessing import normalize
 
-from model import Model 
+# from model import Model 
+from models.model import Model 
 
 
 class VSM(Model):
@@ -18,6 +19,8 @@ class VSM(Model):
 	def __init__(self, index_dir_path):
 
 		Model.__init__(self, index_dir_path)
+
+		self.name = "tf-idf-cosine-vsm"
 
 		self.idf_dict = {}
 
@@ -54,7 +57,6 @@ class VSM(Model):
 			index.append(i)
 			value.append(tf * self.idf(i))
 
-		print(self.vocab_size)
 		vec = scipy.sparse.csr_matrix((value, ([0] * len(index), index)), shape=(1, self.vocab_size))
 
 		return vec

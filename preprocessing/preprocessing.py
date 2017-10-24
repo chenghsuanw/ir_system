@@ -24,8 +24,8 @@ import progressbar as pb
 parser = argparse.ArgumentParser()
 parser.add_argument("--input", type=str, default="../datasets/small/DBdoc.json", help="input json file path")
 parser.add_argument("--output", type=str, default="../indices/small", help="output directory path")
-parser.add_argument("--word_index_chunk_size", type=int, default=1000, help="index chunk size, word_index path will be stored in word_index \% index_chunk_size path")
-parser.add_argument("--document_index_chunk_size", type=int, default=1000, help="index chunk size, word_index path will be stored in word_index \% index_chunk_size path")
+parser.add_argument("--word_index_chunk_size", type=int, default=1000, help="index chunk size, word_index path will be stored in word_index mod index_chunk_size path")
+parser.add_argument("--document_index_chunk_size", type=int, default=1000, help="index chunk size, word_index path will be stored in word_index mod index_chunk_size path")
 
 
 FLAGS = parser.parse_args()

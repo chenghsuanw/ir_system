@@ -9,13 +9,11 @@ from collections import Counter
 
 
 
-
-
-
-
 class Model(object):
 
 	def __init__(self, index_dir_path):
+
+		self.name = None
 
 		self.index_dir_path = index_dir_path
 		self.doc_index_dir_path = os.path.join(self.index_dir_path, "docs")
