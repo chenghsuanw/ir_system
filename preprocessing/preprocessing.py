@@ -13,20 +13,18 @@ import json
 import time
 import re
 import os 
-from collections import Counter
-import pickle
-
+from collections import Counter, defaultdict
 
 import progressbar as pb
 
-
+import sqlite3
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--input", type=str, default="../datasets/small/DBdoc.json", help="input json file path")
-parser.add_argument("--output", type=str, default="../indices/small", help="output directory path")
-parser.add_argument("--word_index_chunk_size", type=int, default=1000, help="index chunk size, word_index path will be stored in word_index mod index_chunk_size path")
-parser.add_argument("--document_index_chunk_size", type=int, default=1000, help="index chunk size, word_index path will be stored in word_index mod index_chunk_size path")
-
+parser.add_argument("--stop_words", type=str, default="../stop_words_en.txt", help="english stop words file path")
+parser.add_argument("--min_count", type=int, default=5, help="only keep frequency > min_count words")
+parser.add_argument("--output", type=str, default="../db/small", help="output directory path")
+parser.add_argument("--chunk_size", type=int, default=10000, help="index chunk size")
 
 FLAGS = parser.parse_args()
 
@@ -34,16 +32,25 @@ if not os.path.exists(FLAGS.output):
 	os.makedirs(FLAGS.output)
 
 
-
 def clear_string(s):
+
 	# input a raw text string
 	# output a string with only a-z
 
 	return re.sub("[^a-z]", " ", s.strip().lower())
 
 
-
 def build_vocab(D):
+
+	# load stop words
+
+	stop_word_path = FLAGS.stop_words
+
+	stop_words = set()
+
+	with open(stop_word_path, "r") as f:
+		for line in f:
+			stop_words.add(line.strip())
 
 	# build vocab
 
@@ -54,27 +61,27 @@ def build_vocab(D):
 	for d in D:
 		# note that some document has no context
 		if d["abstract"]:
-			vocab.update(clear_string(d["abstract"]).split())
-
-	vocab_size = len(vocab)
+			vocab.update([w for w in clear_string(d["abstract"]).split() if w not in stop_words])
 
 	# dump vocab sorted by frequency
 	vocab_path = os.path.join(FLAGS.output, "vocab")
 
-
 	# format: word frequency
-	# note that here we don't cut off any word even its frequency is very low
+	# we only keep words with enough frequency (min_count)
 
 	w2i = {}
 
 	with open(vocab_path, "w") as p:
 		for i, (w, freq) in enumerate(vocab.most_common()):
-			output = "{} {}".format(w, freq)
-			p.write("{}\n".format(output))
-			w2i[w] = i 
+			if freq <= FLAGS.min_count:
+				break
+			else:
+				output = "{} {}".format(w, freq)
+				p.write("{}\n".format(output))
+				w2i[w] = i 
 
 	# vocab summary
-	logging.info("vocab size: {}".format(vocab_size))
+	logging.info("vocab size: {}".format(len(w2i)))
 	logging.info("build vocab time cost: {}".format(time.time() - s_time))
 
 	# return word to index mapping (dict)
@@ -83,7 +90,7 @@ def build_vocab(D):
 
 def build_doc_id(D):
 
-	# because entity has /, we have to index all documents
+	# because entity has "/", we have to index all documents
 
 	s_time = time.time()
 
@@ -100,165 +107,118 @@ def build_doc_id(D):
 			output = e
 			p.write("{}\n".format(e))
 
+	# document summary
+	logging.info("num docs: {}".format(len(entity2i)))
+	logging.info("build doc_id time cost: {}".format(time.time() - s_time))
 
 	return entity2i
 
 
+def insert_db(db, cache):
+
+	# insert the data in cache to db tables
+
+	# to doc_word table
+	db.executemany("INSERT INTO doc_word(doc_id, w_id, freq) VALUES (?, ?, ?)", cache)
+
+	# to doc table, insert word freq and sq2 (insert, because doc are always new)
+	cache_tmp = defaultdict(int)
+	for doc_id, w_id, freq in cache:
+		cache_tmp[doc_id] += freq 
+	cache_tmp = [(k, v) for k, v in cache_tmp.items()]
+	db.executemany("INSERT INTO doc(doc_id, freq) VALUES (?, ?)", cache_tmp)
+
+	# to word table, update word freq and df
+	cache_tmp = defaultdict(int)
+	cache_tmp2 = defaultdict(int)
+	
+	for doc_id, w_id, freq in cache:
+		cache_tmp[w_id] += freq 
+		cache_tmp2[w_id] += 1
+	w_ids = [(w_id,) for w_id in cache_tmp.keys()]
+	cache_tmp = [(v, cache_tmp2[k], k) for k, v in cache_tmp.items()]
+	db.executemany("INSERT OR IGNORE INTO word(w_id) VALUES (?)", w_ids)
+	db.executemany("UPDATE word SET freq = freq + ?, df = df + ? WHERE w_id = ?", cache_tmp)
 
 
-
-def dump_documents(D, w2i, entity2i):
-
-	# dump documents
+def build_db(D, w2i, entity2i):
 
 	s_time = time.time()
 
-	docs_dir_path = os.path.join(FLAGS.output, "docs")
+	db_path = os.path.join(FLAGS.output, "db.sqlite")
 
-	if not os.path.exists(docs_dir_path):
-		os.makedirs(docs_dir_path)
+	conn = sqlite3.connect(db_path)
+	db = conn.cursor()
 
-	doc_lens = {}
+	# to speed up
+	db.execute("""PRAGMA synchronous = OFF""")
+
+	# create 3 tables: 
+	# doc_word: word frequency in a document
+	# word: global word frequency and document frequency of a word
+	# doc: document word count (document length)
+
+	db.execute("DROP TABLE IF EXISTS doc_word")
+	db.execute("DROP TABLE IF EXISTS word")
+	db.execute("DROP TABLE IF EXISTS doc")
+
+	db.execute("CREATE TABLE doc_word(doc_id INTEGER, w_id INTEGER, freq INTEGER)")
+	db.execute("CREATE TABLE word(w_id INTEGER, freq INTEGER DEFAULT 0, df INTEGER DEFAULT 0, CONSTRAINT w_id_unique UNIQUE (w_id))")
+	db.execute("CREATE TABLE doc(doc_id INTEGER, freq INTEGER)")
+
+	# total word count
+	total_word_count = 0
+
+	# cache
+	cache = []
 
 	for d in D:
 
-		# note that some document has no context
-		if d["abstract"]:
-			
-			doc_id = entity2i[d["entity"]]
-
-			doc_path = os.path.join(docs_dir_path, str(doc_id % FLAGS.document_index_chunk_size))
-
-			# convert words to index
-			indices = [w2i[w] for w in clear_string(d["abstract"]).split() if w in w2i]
-
-			doc_lens[doc_id] = len(indices)
-
-			# we use dict to store a doc
-			# format: {word_index: freq}
-			doc = dict(Counter(indices))
-
-			# save in pickle format
-
-			if os.path.isfile(doc_path):
-				docs = pickle.load(open(doc_path, "rb"))
-			else:
-				docs = {}
-
-			docs.update({doc_id:doc})
-
-			pickle.dump(docs, open(doc_path, "wb"))
-
-	doc_lens_path = os.path.join(FLAGS.output, "doc_lens.json")
-
-	json.dump(doc_lens, open(doc_lens_path, "w"))
-
-	logging.info("dump documents and doc_lens time cost: {}".format(time.time() - s_time))
-
-	
-
-
-
-def update_inverted_index(inverted_index, index_dir_path):
-
-	logging.info("updating inverted_index")
-
-	for word_index, index in inverted_index.items():
-
-		word_index_path = os.path.join(index_dir_path, str(word_index % FLAGS.word_index_chunk_size))
-
-		if os.path.isfile(word_index_path):
-
-			d = pickle.load(open(word_index_path, "rb"))
-
-			if word_index not in d:
-				d[word_index] = {}
-
-			d[word_index].update(index)
-
-			# d["df"] = max(d["df"], index["df"])
-			# d["tf"].update(index["tf"])
-
-			pickle.dump(d, open(word_index_path, "wb"))
-
-		else:
-
-			pickle.dump({word_index:index}, open(word_index_path, "wb"))
-
-
-
-
-def dump_inverted_index(D, w2i, entity2i, chunk_size=100000):
-
-
-	s_time = time.time()
-
-
-	index_dir_path = os.path.join(FLAGS.output, "inverted_index")
-
-	if not os.path.exists(index_dir_path):
-		os.makedirs(index_dir_path)
-
-
-	# save df, tf
-	# format: {"df": int, "tf":{doc_id: freq}}
-
-	inverted_index = {}
-
-	num_doc = len(D)
-
-	for n, d in enumerate(D):
-
 		if d["abstract"]:
 
 			doc_id = entity2i[d["entity"]]
-			indices = [w2i[w] for w in clear_string(d["abstract"]).split() if w in w2i]
+			word_indices = [w2i[w] for w in clear_string(d["abstract"]).split() if w in w2i]
 
-			for i in indices:
+			word_count = Counter(word_indices)
 
-				# if i not in inverted_index:
-				# 	inverted_index[i] = {}
-				# 	inverted_index[i]["df"] = 0
-				# 	inverted_index[i]["tf"] = {}
+			for w_id, freq in word_count.items():
 
-				# inverted_index[i]["df"] += 1 
+				cache.append((doc_id, w_id, freq))
 
-				# if doc_id not in inverted_index[i]["tf"]:
-				# 	inverted_index[i]["tf"][doc_id] = 0
+				total_word_count += freq 
 
-				# inverted_index[i]["tf"][doc_id] += 1
-				if i not in inverted_index:
-					inverted_index[i] = {}
+				if len(cache) > FLAGS.chunk_size:
+					# add to db
+					insert_db(db, cache)
+					# flush cache
+					cache = []
 
-				if doc_id not in inverted_index[i]:
-					inverted_index[i][doc_id] = 0
+	if len(cache) > 0:
+		insert_db(db, cache)
 
-				inverted_index[i][doc_id] += 1
+	# build index
+	logging.info("create index on tables")
 
+	db.execute("CREATE INDEX doc_word_index ON doc_word(w_id)")
+	db.execute("CREATE INDEX word_index ON word(w_id)")
+	db.execute("CREATE INDEX doc_index ON doc(doc_id)")
 
+	conn.commit()
+	conn.close()
 
-		if (n+1) % chunk_size == 0:
-			logging.info("processing {}/{}".format(n, num_doc))
-			update_inverted_index(inverted_index, index_dir_path)
-			inverted_index = {}
+	logging.info("build database time cost: {}".format(time.time() - s_time))
 
-	if len(inverted_index) > 0:
-		update_inverted_index(inverted_index, index_dir_path)
-
-
-	logging.info("dump inverted index time cost: {}".format(time.time() - s_time))
+	return total_word_count
 
 
-
-def dump_meta_data(D, w2i, entity2i):
+def dump_meta_data(D, w2i, entity2i, total_word_count):
 
 	s_time = time.time()
 
 	meta_data = {
 		"num_docs": len(entity2i), # number of documents with abstract
 		"vocab_size": len(w2i), # total word number
-		"word_index_chunk_size": FLAGS.word_index_chunk_size,
-		"document_index_chunk_size": FLAGS.document_index_chunk_size,
+		"total_word_count": total_word_count
 	}
 
 	meta_data_path = os.path.join(FLAGS.output, "meta_data.json")
@@ -266,6 +226,7 @@ def dump_meta_data(D, w2i, entity2i):
 	json.dump(meta_data, open(meta_data_path, "w"))
 
 	logging.info("dump meta data time cost: {}".format(time.time() - s_time))
+
 
 def main():
 
@@ -276,16 +237,9 @@ def main():
 
 	entity2i = build_doc_id(D)
 
-	dump_documents(D, w2i, entity2i)
+	total_word_count = build_db(D, w2i, entity2i)
 
-	dump_inverted_index(D, w2i, entity2i)
-
-	dump_meta_data(D, w2i, entity2i)
-
-
-
-
-
+	dump_meta_data(D, w2i, entity2i, total_word_count)
 
 
 if __name__ == "__main__":

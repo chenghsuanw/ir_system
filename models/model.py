@@ -7,6 +7,7 @@ import pickle
 import re
 from collections import Counter
 
+import sqlite3
 
 
 class Model(object):
@@ -16,15 +17,11 @@ class Model(object):
 		self.name = None
 
 		self.index_dir_path = index_dir_path
-		self.doc_index_dir_path = os.path.join(self.index_dir_path, "docs")
-		self.inverted_index_dir_path = os.path.join(self.index_dir_path, "inverted_index")
 
 		meta_data_path = os.path.join(index_dir_path, "meta_data.json")
 		meta_data = json.load(open(meta_data_path))
 		self.num_docs = meta_data["num_docs"]
 		self.vocab_size = meta_data["vocab_size"]
-		self.word_index_chunk_size = meta_data["word_index_chunk_size"]
-		self.document_index_chunk_size = meta_data["document_index_chunk_size"]
 
 		vocab_path = os.path.join(index_dir_path, "vocab")
 		self.w2i, self.i2w = self.load_vocab(vocab_path)
@@ -32,9 +29,15 @@ class Model(object):
 		doc_id_path = os.path.join(index_dir_path, "doc_ids")
 		self.e2i, self.i2e = self.load_doc_ids(doc_id_path)
 
-		# self.df = self.load_df()
+
+		db_path = os.path.join(index_dir_path, "db.sqlite")
+		conn = sqlite3.connect(db_path)
+		db = conn.cursor()
+		self.db = db 
+
 
 	def clear_string(self, s):
+
 		# input a raw text string
 		# output a string with only a-z
 
@@ -69,18 +72,6 @@ class Model(object):
 		return e2i, i2e
 
 
-	def load_df(self):
-
-		df = {}
-
-		for i in self.i2w:
-			df[i] = self.get_df(i)
-
-		return df 
-
-
-
-
 	def query2index(self, query):
 
 		# query is a string
@@ -94,33 +85,41 @@ class Model(object):
 	def tf_by_word_id_doc_id(self, word_id, doc_id):
 
 		# get term frequency by specific word index and document index
+		# avoid to use this because the index of this table, doc_word, is built on only word_id
 
 		# word_id = word index (integer)
 		# doc_id: integer
 
-		# return: scaler
+		# return: scalar
 
-		# from document index
-		document_path = os.path.join(self.doc_index_dir_path, str(doc_id % self.document_index_chunk_size))
+		cmd = "SELECT freq FROM doc_word WHERE doc_id = {} AND w_id = {}".format(doc_id, word_id)
 
-		doc = pickle.load(open(document_path, "rb"))[doc_id]
+		r = self.db.execute(cmd).fetchall()
 
-		return doc[word_id] if word_id in doc else 0
+
+		if len(r) > 0:
+			return r[0][0]
+		else:
+			return 0
 
 	def tf_by_doc_id(self, doc_id):
 
 		# get all term frequency by specific document index
+		# avoid to use this because the index of this table, doc_word, is built on only word_id
 
 		# doc_id: integer
 
 		# return: {word_index:freq}
 
-		# from document index
-		document_path = os.path.join(self.doc_index_dir_path, str(doc_id % self.document_index_chunk_size))
+		cmd = "SELECT w_id, freq FROM doc_word WHERE doc_id = {}".format(doc_id)
 
-		doc = pickle.load(open(document_path, "rb"))[doc_id]
+		r = self.db.execute(cmd).fetchall()
+
+
+		doc = {w_id:freq for w_id, freq in r}
 
 		# return all term frequency in this doc
+		
 		return doc
 
 	def tf_by_word_id(self, word_id):
@@ -129,9 +128,11 @@ class Model(object):
 
 		# return: {doc_id:freq}
 
-		word_path = os.path.join(self.inverted_index_dir_path, str(word_id % self.word_index_chunk_size))
+		cmd = "SELECT doc_id, freq FROM doc_word WHERE w_id = {}".format(word_id)
 
-		inverted_index = pickle.load(open(word_path, "rb"))[word_id]
+		r = self.db.execute(cmd).fetchall()
+
+		inverted_index = {doc_id:freq for doc_id, freq in r}
 
 		return inverted_index
 
@@ -141,44 +142,52 @@ class Model(object):
 
 		# return: scalar
 
-		word_path = os.path.join(self.inverted_index_dir_path, str(word_id % self.word_index_chunk_size))
 
-		inverted_index = pickle.load(open(word_path, "rb"))[word_id]
+		cmd = "SELECT df FROM word WHERE w_id = {}".format(word_id)
 
-		return len(inverted_index)
+		r = self.db.execute(cmd).fetchall()
+
+
+
+		if len(r) > 0:
+			return r[0][0]
+		else:
+			return 0
+
+	def get_all_df(self):
+
+		# get all document frequency
+		# return: {word_index: freq}
+
+		cmd = "SELECT w_id, df FROM word"
+		r = self.db.execute(cmd).fetchall()
+
+		return {k:v for k, v in r}
+
 
 	def get_docs_by_word_id(self, word_id):
 
-		# get document bag of word dictionaries by given word index or a list of word indices
+		# get document contain given word index or a list of word indices
+		# NOTICE: only get the frequency of given word index in each document, for fast computation
 
 		# input: int or [int]
-		# return: [(doc_id, {term: freq})]
+		# return: [(doc_id, {term: freq}, sq2)]
 
 		if type(word_id) == int:
 			word_id = [word_id]
 
+		word_id = [str(w) for w in word_id]
 
-		doc_ids = set()
+		cmd = "SELECT doc_id, w_id, freq FROM doc_word WHERE w_id in ({})".format(", ".join(word_id))
 
-		for wi in word_id:
-			tf = self.tf_by_word_id(wi)
-			# tf: {doc_id: freq}
-			doc_ids.update(tf.keys())
+		r = self.db.execute(cmd).fetchall()
 
-		docs = []
+		doc_ids = [rr[0] for rr in r]
 
-		for doc_id in doc_ids:
+		docs = {doc_id: {} for doc_id in doc_ids}
+		for doc_id, w_id, freq in r:
 
-			doc = self.tf_by_doc_id(doc_id)
+			docs[doc_id][w_id] = freq 
 
-			docs.append((doc_id, doc))
-
-
-		return docs 
-
-
-
-
-
-
+		return docs.items()
 

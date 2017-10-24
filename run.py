@@ -24,7 +24,6 @@ parser.add_argument("--top", type=int, default=1000, help="output top k ranked l
 FLAGS = parser.parse_args()
 
 
-
 def select_model(model_name):
 
 	model = None
@@ -34,7 +33,6 @@ def select_model(model_name):
 		model = VSM(FLAGS.index)
 
 	return model 
-
 
 
 def retrieval(model, query):
@@ -66,7 +64,6 @@ def retrieval(model, query):
 	return result 
 
 
-
 def main():
 
 	# load queries
@@ -78,7 +75,6 @@ def main():
 	# select model
 	model = select_model(FLAGS.model)
 	logging.info("model [{}] initialized".format(model.name))
-
 
 	# retrieval
 	results = []
@@ -105,16 +101,12 @@ def main():
 
 	# dump result
 
-	result_df = pd.Dataframe(results)
+	result_df = pd.DataFrame(results)
 
 	columns = ["query_id", "Q0", "entity", "rank", "score", "model_name"]
 
 	logging.info("dump result to: {}".format(FLAGS.output))
 	result_df.to_csv(FLAGS.output, columns=columns, index=None, header=None, sep=" ")
-
-
-
-
 
 
 if __name__ == "__main__":
