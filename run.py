@@ -53,7 +53,7 @@ def retrieval(model, query):
 		result_dict = {
 			"query_id": query.query_id,
 			"Q0": "Q0",
-			"entity": "<dbpedia:{}".format(entity),
+			"entity": "<dbpedia:{}>".format(entity),
 			"rank": n + 1,
 			"score": score,
 			"model_name": model.name
