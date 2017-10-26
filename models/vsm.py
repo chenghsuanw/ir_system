@@ -3,38 +3,24 @@ vanilla tf-idf cosine-similairty model
 '''
 
 import math
+from collections import defaultdict
 
 import scipy.sparse
 import numpy as np 
 from sklearn.preprocessing import normalize
 
-from models.model import Model
+from models.model_base import ModelBase
 
 
-class VSM(Model):
+class VSM(ModelBase):
 
 	def __init__(self, index_dir_path):
 
-		Model.__init__(self, index_dir_path)
+		ModelBase.__init__(self, index_dir_path)
 
 		self.name = "tf-idf-cosine-vsm"
 
-		self.idf_dict = {}
-
-		df = self.get_all_df()
-
-		self.idf = self.compute_idf(df, self.num_docs)
-
-
-	def compute_idf(self, df, num_docs):
-
-		# idf = log(N / df)
-
-		idf = {}
-		for i, v in df.items():
-			idf[i] = math.log(num_docs / v)
-
-		return idf 
+		self.idf = self.get_all_idf()
 
 
 	def find(self, query, top=1000):
@@ -46,7 +32,8 @@ class VSM(Model):
 		# q_dict: {word_index: freq}
 
 		# add idf weight in query
-		q_weight = {w_id: freq * self.idf[w_id] for w_id, freq in q_dict.items()}
+		q_weight = defaultdict(float)
+		q_weight.update({w_id: freq * self.idf[w_id] for w_id, freq in q_dict.items()})
 
 		word_indices = [wi for wi in q_dict]
 		docs = self.get_docs_by_word_id(word_indices)
@@ -56,13 +43,12 @@ class VSM(Model):
 		entities = []
 
 		for n, (doc_id, doc) in enumerate(docs):
-			# sq2: compute nomalized term, not a real value, but only compute query words
-			sq2 = 0 
-			for w_id, freq in doc.items():
-				tmp = freq * self.idf[w_id]
-				similarities[n] += tmp * q_weight[w_id]
-				sq2 += tmp ** 2
-			similarities[n] /= np.sqrt(sq2) 
+
+
+			for w_id, weight in doc.items():
+
+				similarities[n] += weight * q_weight[w_id]
+
 			entities.append(self.i2e[doc_id])
 
 		doc_scores = [(entity, score) for entity, score in zip(entities, similarities)]
@@ -71,6 +57,48 @@ class VSM(Model):
 		top_k = sorted(doc_scores, key=lambda x:x[1], reverse=True)[:top]
 
 		return top_k
+
+
+	def get_all_idf(self):
+
+		# get all document frequency
+		# return: {word_index: freq}
+
+		cmd = "SELECT w_id, weight FROM idf"
+		r = self.db.execute(cmd).fetchall()
+
+		return {k:v for k, v in r}
+
+
+	def get_docs_by_word_id(self, word_id):
+
+		# get document contain given word index or a list of word indices
+		# NOTICE: only get the frequency of given word index in each document, for fast computation
+
+		# input: int or [int]
+		# return: [(doc_id, {term: freq}, sq2)]
+
+		if type(word_id) == int:
+			word_id = [word_id]
+
+		word_id = [str(w) for w in word_id]
+
+		cmd = "SELECT doc_id, w_id, weight FROM doc_word WHERE w_id IN ({})".format(", ".join(word_id))
+		# cmd = "SELECT doc_id, w_id, freq FROM word_doc WHERE doc_id IN (SELECT doc_id FROM doc_word WHERE w_id in ({}))".format(", ".join(word_id))
+		# cmd = "SELECT doc_id,"
+		
+		r = self.db.execute(cmd).fetchall()
+
+		doc_ids = [rr[0] for rr in r]
+
+		docs = {doc_id: {} for doc_id in doc_ids}
+		for doc_id, w_id, freq in r:
+
+			docs[doc_id][w_id] = freq 
+
+		return docs.items()
+
+
 
 
 

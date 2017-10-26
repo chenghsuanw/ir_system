@@ -17,7 +17,7 @@ import progressbar as pb
 parser = argparse.ArgumentParser()
 parser.add_argument("--query", type=str, default="./datasets/small/queries-v2.txt", help="input query file path")
 parser.add_argument("--output", type=str, default="./result.run", help="output format file path")
-parser.add_argument("--index", type=str, default="./db/small", help="index directory path")
+parser.add_argument("--index", type=str, default="./db/small_tf_idf_cos", help="index directory path")
 parser.add_argument("--model", type=str, default="vsm", help="model type: [vsm, ]")
 parser.add_argument("--top", type=int, default=1000, help="output top k ranked list")
 
