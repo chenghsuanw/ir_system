@@ -90,7 +90,7 @@ class DBBuilder(DBBuilderBase):
 		# compute idf
 		idf = np.log(len(entity2i) / df)
 
-		# store idf in db
+		# store idf in db                   Note that float(w) because w is numpy.float64 class, not float class
 		db.executemany("INSERT INTO idf(w_id, weight) VALUES (?, ?)", [(i, float(w)) for i, w in enumerate(idf)])
 
 		# normalize term
@@ -125,7 +125,9 @@ class DBBuilder(DBBuilderBase):
 					total_word_count += freq
 
 					# tf-idf 
-					weight = freq * idf[w_id] / sq2
+					# we multiply twice because one idf is from query
+					# we multiply here so that we don't need to multiply latter (more fast)
+					weight = freq * idf[w_id] * idf[w_id] / sq2
 
 					cache.append((doc_id, w_id, weight))
 

@@ -77,9 +77,11 @@ class ModelBase(object):
 		# query is a string
 		# return a dict: {word_index: freq}
 
-		indices = [self.w2i[w] for w in self.clear_string(query).split() if w in self.w2i]
+		cnt = Counter(self.clear_string(query).split())
 
-		return dict(Counter(indices))
+		return {self.w2i[w]: freq for w, freq in cnt.items() if w in self.w2i}
+
+		# return dict(Counter(indices))
 
 	def find(self, query, top=1000):
 		raise NotImplementedError
