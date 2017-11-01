@@ -18,8 +18,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--query", type=str, default="./datasets/small/queries-v2.txt", help="input query file path")
 parser.add_argument("--output", type=str, default="./result.run", help="output format file path")
 parser.add_argument("--index", type=str, default="./db/small_tf_idf_cos", help="index directory path")
-parser.add_argument("--model", type=str, default="vsm", help="model type: [vsm, ]")
+parser.add_argument("--model", type=str, default="vsm", help="model type: [vsm, lm]")
 parser.add_argument("--top", type=int, default=1000, help="output top k ranked list")
+
+parser.add_argument("--alpha", type=float, default=0.1, help="lm corpus prob alpha")
 
 FLAGS = parser.parse_args()
 
@@ -31,7 +33,9 @@ def select_model(model_name):
 	if model_name == "vsm":
 		from models.vsm import VSM 
 		model = VSM(FLAGS.index)
-
+	if model_name == "lm":
+		from models.lm import LM 
+		model = LM(FLAGS.index, FLAGS.alpha)
 	return model 
 
 
