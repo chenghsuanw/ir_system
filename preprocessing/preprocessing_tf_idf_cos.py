@@ -60,16 +60,12 @@ class DBBuilder(DBBuilderBase):
 		# to speed up
 		db.execute("""PRAGMA synchronous = OFF""")
 
-		# create 3 tables: 
+		# create 1 tables: 
 		# doc_word: word frequency in a document
-		# doc: document word count (document length)
 
 		db.execute("DROP TABLE IF EXISTS doc_word")
-		db.execute("DROP TABLE IF EXISTS idf")
 
 		db.execute("CREATE TABLE doc_word(doc_id INTEGER, w_id INTEGER, weight REAL)")
-		db.execute("CREATE TABLE idf(w_id INTEGER, weight REAL)")
-
 
 		# compute all df
 
@@ -91,7 +87,7 @@ class DBBuilder(DBBuilderBase):
 		idf = np.log(len(entity2i) / df)
 
 		# store idf in db                   Note that float(w) because w is numpy.float64 class, not float class
-		db.executemany("INSERT INTO idf(w_id, weight) VALUES (?, ?)", [(i, float(w)) for i, w in enumerate(idf)])
+		# db.executemany("INSERT INTO idf(w_id, weight) VALUES (?, ?)", [(i, float(w)) for i, w in enumerate(idf)])
 
 		# normalize term
 		# sq2 = np.zeros((len(entity2i)), dtype=np.float32)
@@ -145,7 +141,7 @@ class DBBuilder(DBBuilderBase):
 		logging.info("create index on tables")
 
 		db.execute("CREATE INDEX doc_word_index ON doc_word(w_id)")
-		db.execute("CREATE INDEX idf_index ON idf(w_id)")
+		# db.execute("CREATE INDEX idf_index ON idf(w_id)")
 
 		conn.commit()
 		conn.close()

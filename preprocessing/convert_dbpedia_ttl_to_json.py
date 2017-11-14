@@ -21,7 +21,7 @@ parser.add_argument("--input", type=str, default="/tmp/gdoggg2032/long_abstracts
 parser.add_argument("--output", type=str, help="output json file path")
 
 
-args = parser.parse_args()
+FLAGS = parser.parse_args()
 
 # record processing time
 s_time = time.time()
@@ -32,9 +32,9 @@ logging.info("start processing...")
 g = rdflib.Graph()
 
 
-logging.info("read data from: {}".format(args.input))
+logging.info("read data from: {}".format(FLAGS.input))
 # this costs long time
-g.parse(args.input, format="ttl")
+g.parse(FLAGS.input, format="ttl")
 
 
 maxval = len(g)
@@ -59,8 +59,8 @@ for n, (resource, category, abstract) in enumerate(g):
 
 pbar.finish()
 
-logging.info("dump to file: {}".format(args.output))
-json.dump(data, open(args.output, "w"))
+logging.info("dump to file: {}".format(FLAGS.output))
+json.dump(data, open(FLAGS.output, "w"))
 
 logging.info("total time cost: {}".format(time.time() - s_time))
 
