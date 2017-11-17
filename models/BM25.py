@@ -4,18 +4,25 @@ import pickle
 import math
 import numpy as np
 import operator
+# from collections import Counter
+
+documents_file = sys.argv[2]
+doc_counter_list_file = sys.argv[3]
+word_appear_doc_dict_file = sys.argv[4]
+query_file = sys.argv[5]
+output_file = sys.argv[6]
 
 def main():
 	# D : [{'entity':'string','abstract':'[word]'}]
-	with open("../datasets/small/documents","rb") as f:
+	with open(documents_file,"rb") as f:
 		D = pickle.load(f)
 		
 	# doc_counter_list : [doc_counter]
-	with open("../datasets/small/doc_counter_list","rb") as f:
+	with open(doc_counter_list_file,"rb") as f:
 		doc_counter_list = pickle.load(f)
 
 	# word_appear_doc_dict : {'word': [documents]}
-	with open("../datasets/small/word_appear_doc_dict","rb") as f:
+	with open(word_appear_doc_dict_file, "rb") as f:
 		word_appear_doc_dict = pickle.load(f)
 
 	doc_count = len(D)
@@ -27,7 +34,7 @@ def main():
 
 	# Q is a list : [query_id, [query_word]]
 	Q = []
-	f = open("../datasets/small/queries-v2.txt")
+	f = open(query_file)
 	line = f.readline()	
 	while line:
 		Q.append(line.split('\t'))
@@ -38,7 +45,7 @@ def main():
 	K1 = 1
 	b = 0.75
 
-	f = open("result.txt","w")
+	f = open(output_file,"w")
 	for q in range(len(Q)):
 		score = np.zeros(doc_count)
 		for term in Q[q][1]:
