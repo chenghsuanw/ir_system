@@ -62,8 +62,7 @@ class LM(ModelBase):
 			similarities[n] += (len(self.w2i) - len(doc)) * log0
 
 			entities.append(self.i2e[doc_id])
-		print("")
-		print(a, l)
+
 		# doc_scores = [(entity, score) for entity, score in zip(entities, similarities)]
 
 		# ranking
