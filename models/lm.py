@@ -39,18 +39,31 @@ class LM(ModelBase):
 		similarities = np.zeros((len(docs)))
 		entities = []
 
+		l = 0
+		a = 0
 		for n, (doc_id, doc) in enumerate(docs):
 
-			for w_id, weight in doc.items():
-				# print(weight)
+			for w_id, freq in q_dict.items():
+				if w_id in doc:
+					weight = (1 - self.alpha) * doc[w_id]  + self.alpha * corpus_prob[w_id]
+				else:
+					l += 1
+					weight = self.alpha * corpus_prob[w_id]
+				a += 1
 
-				similarities[n] += np.log((1 - self.alpha) * weight  + self.alpha * corpus_prob[w_id]) * q_dict[w_id]
+				similarities[n] += np.log(weight) * q_dict[w_id]
+
+
+			# for w_id, weight in doc.items():
+
+			# 	similarities[n] += np.log((1 - self.alpha) * weight  + self.alpha * corpus_prob[w_id]) * q_dict[w_id]
 			
 			# other words: prob 0 -> add log0
 			similarities[n] += (len(self.w2i) - len(doc)) * log0
 
 			entities.append(self.i2e[doc_id])
-
+		print("")
+		print(a, l)
 		# doc_scores = [(entity, score) for entity, score in zip(entities, similarities)]
 
 		# ranking
